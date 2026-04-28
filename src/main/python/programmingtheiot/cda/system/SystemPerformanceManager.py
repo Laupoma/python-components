@@ -24,7 +24,6 @@ from programmingtheiot.data.SystemPerformanceData import SystemPerformanceData
 class SystemPerformanceManager(object):
 	"""
 	Shell representation of class for student implementation.
-	
 	"""
 
 	def __init__(self):
@@ -57,13 +56,22 @@ class SystemPerformanceManager(object):
 	def handleTelemetry(self):
 		cpuUtilPct = self.cpuUtilTask.getTelemetryValue()
 		memUtilPct = self.memUtilTask.getTelemetryValue()
-		logging.debug('CPU utilization is %s percent, and memory utilization is %s percent.', str(cpuUtilPct), str(memUtilPct))
-	
-	def handleTelemetry(self):
-		pass
 		
+		logging.debug(
+			'CPU utilization is %s percent, and memory utilization is %s percent.',
+			str(cpuUtilPct), str(memUtilPct))
+		
+		sysPerfData = SystemPerformanceData()
+		sysPerfData.setLocationID(self.locationID)
+		sysPerfData.setCpuUtilization(cpuUtilPct)
+		sysPerfData.setMemoryUtilization(memUtilPct)
+		
+		if self.dataMsgListener:
+			self.dataMsgListener.handleSystemPerformanceMessage(data = sysPerfData)
+	
 	def setDataMessageListener(self, listener: IDataMessageListener) -> bool:
-		pass
+		if listener:
+			self.dataMsgListener = listener
 
 	def startManager(self):
 		logging.info("Starting SystemPerformanceManager...")

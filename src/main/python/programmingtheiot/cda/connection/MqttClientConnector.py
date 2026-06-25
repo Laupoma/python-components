@@ -19,10 +19,6 @@ class MqttClientConnector(IPubSubClient):
 	"""
 
 	def __init__(self, clientID: str = None):
-		"""
-		Default constructor. This will set remote broker information and client connection
-		information based on the default configuration file contents.
-		"""
 		self.config = ConfigUtil()
 		self.dataMsgListener = None
 
@@ -115,17 +111,45 @@ class MqttClientConnector(IPubSubClient):
 	def onActuatorCommandMessage(self, client, userdata, msg):
 		logging.info('Actuator command message received on topic: ' + msg.topic)
 
-	def publishMessage(self, resource: ResourceNameEnum = None, msg: str = None, qos: int = ConfigConst.DEFAULT_QOS):
-		logging.info('publishMessage called. Not yet implemented.')
-		return False
+	def publishMessage(self, resource: ResourceNameEnum = None, msg: str = None, qos: int = ConfigConst.DEFAULT_QOS) -> bool:
+		if not resource:
+			logging.warning('No topic specified. Cannot publish message.')
+			return False
 
-	def subscribeToTopic(self, resource: ResourceNameEnum = None, callback = None, qos: int = ConfigConst.DEFAULT_QOS):
-		logging.info('subscribeToTopic called. Not yet implemented.')
-		return False
+		if not msg:
+			logging.warning('No message specified. Cannot publish message to topic: ' + resource.value)
+			return False
 
-	def unsubscribeFromTopic(self, resource: ResourceNameEnum = None):
-		logging.info('unsubscribeFromTopic called. Not yet implemented.')
-		return False
+		if qos < 0 or qos > 2:
+			qos = ConfigConst.DEFAULT_QOS
+
+		msgInfo = self.mqttClient.publish(topic = resource.value, payload = msg, qos = qos)
+		msgInfo.wait_for_publish()
+
+		return True
+
+	def subscribeToTopic(self, resource: ResourceNameEnum = None, callback = None, qos: int = ConfigConst.DEFAULT_QOS) -> bool:
+		if not resource:
+			logging.warning('No topic specified. Cannot subscribe.')
+			return False
+
+		if qos < 0 or qos > 2:
+			qos = ConfigConst.DEFAULT_QOS
+
+		logging.info('Subscribing to topic %s', resource.value)
+		self.mqttClient.subscribe(resource.value, qos)
+
+		return True
+
+	def unsubscribeFromTopic(self, resource: ResourceNameEnum = None) -> bool:
+		if not resource:
+			logging.warning('No topic specified. Cannot unsubscribe.')
+			return False
+
+		logging.info('Unsubscribing from topic %s', resource.value)
+		self.mqttClient.unsubscribe(resource.value)
+
+		return True
 
 	def setDataMessageListener(self, listener: IDataMessageListener = None) -> bool:
 		if listener:

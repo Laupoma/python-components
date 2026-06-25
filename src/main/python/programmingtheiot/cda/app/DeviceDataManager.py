@@ -4,6 +4,7 @@
 #
 import logging
 
+from programmingtheiot.cda.connection.MqttClientConnector import MqttClientConnector
 from programmingtheiot.cda.system.ActuatorAdapterManager import ActuatorAdapterManager
 from programmingtheiot.cda.system.SensorAdapterManager import SensorAdapterManager
 from programmingtheiot.cda.system.SystemPerformanceManager import SystemPerformanceManager
@@ -47,6 +48,10 @@ class DeviceDataManager(IDataMessageListener):
 			self.configUtil.getFloat(
 				ConfigConst.CONSTRAINED_DEVICE, ConfigConst.TRIGGER_HVAC_TEMP_CEILING_KEY)
 
+		self.enableMqttClient = \
+			self.configUtil.getBoolean(
+				section = ConfigConst.CONSTRAINED_DEVICE, key = ConfigConst.ENABLE_MQTT_CLIENT_KEY)
+
 		self.sysPerfMgr         = None
 		self.sensorAdapterMgr   = None
 		self.actuatorAdapterMgr = None
@@ -68,6 +73,11 @@ class DeviceDataManager(IDataMessageListener):
 		if self.enableActuation:
 			self.actuatorAdapterMgr = ActuatorAdapterManager(dataMsgListener = self)
 			logging.info("Local actuation capabilities enabled")
+
+		if self.enableMqttClient:
+			self.mqttClient = MqttClientConnector()
+			self.mqttClient.setDataMessageListener(self)
+			logging.info("MQTT client enabled")
 
 	def handleActuatorCommandMessage(self, data: ActuatorData = None) -> ActuatorData:
 		logging.info("Actuator data: " + str(data))
@@ -119,18 +129,36 @@ class DeviceDataManager(IDataMessageListener):
 
 	def startManager(self):
 		logging.info("Starting DeviceDataManager...")
+
 		if self.sysPerfMgr:
 			self.sysPerfMgr.startManager()
+
 		if self.sensorAdapterMgr:
 			self.sensorAdapterMgr.startManager()
+
+		if self.mqttClient:
+			self.mqttClient.connectClient()
+			self.mqttClient.subscribeToTopic(
+				resource = ResourceNameEnum.CDA_ACTUATOR_CMD_RESOURCE,
+				callback = None,
+				qos      = ConfigConst.DEFAULT_QOS)
+
 		logging.info("Started DeviceDataManager.")
 
 	def stopManager(self):
 		logging.info("Stopping DeviceDataManager...")
+
 		if self.sysPerfMgr:
 			self.sysPerfMgr.stopManager()
+
 		if self.sensorAdapterMgr:
 			self.sensorAdapterMgr.stopManager()
+
+		if self.mqttClient:
+			self.mqttClient.unsubscribeFromTopic(
+				resource = ResourceNameEnum.CDA_ACTUATOR_CMD_RESOURCE)
+			self.mqttClient.disconnectClient()
+
 		logging.info("Stopped DeviceDataManager.")
 
 	def getLatestActuatorDataResponseFromCache(self, name: str = None) -> ActuatorData:

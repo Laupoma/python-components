@@ -133,6 +133,14 @@ class CoapServerAdapter():
 			ConfigConst.SYSTEM_PERF_MSG,
 			self.sysPerfHandler)
 
+		self.actuatorHandler = UpdateActuatorResourceHandler(
+			dataMsgListener = self.dataMsgListener)
+
+		self.addResource(
+			ResourceNameEnum.CDA_ACTUATOR_CMD_RESOURCE,
+			ConfigConst.ACTUATOR_CMD,
+			self.actuatorHandler)
+
 	def _runServer(self):
 		try:
 			logging.info("CoAP server running...")

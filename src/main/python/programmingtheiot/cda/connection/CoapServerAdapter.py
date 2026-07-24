@@ -64,7 +64,23 @@ class CoapServerAdapter():
 		return False
 
 	def addResource(self, resourcePath: ResourceNameEnum = None, endName: str = None, resource = None):
-		pass
+		if resourcePath and resource:
+			# obtener el string del enum: "PIOT/ConstrainedDevice/SensorMsg"
+			path = resourcePath.value
+
+			# agregar endName si existe: "PIOT/ConstrainedDevice/SensorMsg/TempSensor"
+			if endName:
+				path = path + '/' + endName
+
+			logging.info(f"Registering CoAP resource handler for path: {path}")
+
+			# registrar en el servidor coapthon3
+			self.coapServer.add_resource(path, resource)
+
+			return True
+
+		logging.warning("Resource path or handler is None. Ignoring.")
+		return False
 
 	def startServer(self):
 		if self.coapServer:
@@ -97,6 +113,26 @@ class CoapServerAdapter():
 
 		logging.info("CoAP server initialized.")
 
+		# registrar handlers de telemetría
+		self.tempHandler = GetTelemetryResourceHandler(
+			name = ConfigConst.TEMP_SENSOR_NAME,
+			coap_server = self.coapServer)
+
+		self.sysPerfHandler = GetSystemPerformanceResourceHandler(
+			name = ConfigConst.SYSTEM_PERF_MSG,
+			coap_server = self.coapServer)
+
+		# registrar en el servidor
+		self.addResource(
+			ResourceNameEnum.CDA_SENSOR_MSG_RESOURCE,
+			ConfigConst.TEMP_SENSOR_NAME,
+			self.tempHandler)
+
+		self.addResource(
+			ResourceNameEnum.CDA_SYSTEM_PERF_MSG_RESOURCE,
+			ConfigConst.SYSTEM_PERF_MSG,
+			self.sysPerfHandler)
+
 	def _runServer(self):
 		try:
 			logging.info("CoAP server running...")
@@ -104,4 +140,3 @@ class CoapServerAdapter():
 		except Exception as e:
 			traceback.print_exception(type(e), e, e.__traceback__)
 			logging.warning("Failed to run CoAP server.")
-

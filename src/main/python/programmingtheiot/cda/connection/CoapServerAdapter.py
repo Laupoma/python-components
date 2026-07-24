@@ -65,21 +65,38 @@ class CoapServerAdapter():
 
 	def addResource(self, resourcePath: ResourceNameEnum = None, endName: str = None, resource = None):
 		if resourcePath and resource:
-			# obtener el string del enum: "PIOT/ConstrainedDevice/SensorMsg"
-			path = resourcePath.value
+			uriPath = resourcePath.value
 
-			# agregar endName si existe: "PIOT/ConstrainedDevice/SensorMsg/TempSensor"
 			if endName:
-				path = path + '/' + endName
+				uriPath = uriPath + '/' + endName
+				resource.name = endName
 
-			logging.info(f"Registering CoAP resource handler for path: {path}")
+			trimmedUriPath   = uriPath.strip("/")
+			resourceList     = trimmedUriPath.split("/")
+			resourceTree     = None
+			registrationPath = ""
+			generationCount  = 0
 
-			# registrar en el servidor coapthon3
-			self.coapServer.add_resource(path, resource)
+			for resourceName in resourceList:
+				generationCount  = generationCount + 1
+				registrationPath = registrationPath + "/" + resourceName
 
+				try:
+					resourceTree = self.coapServer.root[registrationPath]
+				except KeyError:
+					resourceTree = None
+
+			if not resourceTree:
+				if len(resourceList) != generationCount:
+					return None
+
+				resource.path = registrationPath
+				self.coapServer.root[registrationPath] = resource
+
+			logging.info(f"Registered CoAP resource handler for path: {uriPath}")
 			return True
 
-		logging.warning("Resource path or handler is None. Ignoring.")
+		logging.warning("No resource provided for path: " + str(resourcePath))
 		return False
 
 	def startServer(self):
@@ -107,39 +124,57 @@ class CoapServerAdapter():
 			logging.warning("CoAP server not yet initialized (shouldn't happen).")
 
 	def _initServer(self):
-		self.coapServer = CoAP(
-			server_address = (self.host, self.port),
-			multicast = False)
+		try:
+			self.coapServer = CoAP(
+				server_address = (self.host, self.port),
+				multicast = False)
 
-		logging.info("CoAP server initialized.")
+			# handler de humidificador
+			self.addResource(
+				resourcePath = ResourceNameEnum.CDA_ACTUATOR_CMD_RESOURCE,
+				endName      = ConfigConst.HUMIDIFIER_ACTUATOR_NAME,
+				resource     = UpdateActuatorResourceHandler(dataMsgListener = self.dataMsgListener))
 
-		# registrar handlers de telemetría
-		self.tempHandler = GetTelemetryResourceHandler(
-			name = ConfigConst.TEMP_SENSOR_NAME,
-			coap_server = self.coapServer)
+			# handler de HVAC
+			self.addResource(
+				resourcePath = ResourceNameEnum.CDA_ACTUATOR_CMD_RESOURCE,
+				endName      = ConfigConst.HVAC_ACTUATOR_NAME,
+				resource     = UpdateActuatorResourceHandler(dataMsgListener = self.dataMsgListener))
 
-		self.sysPerfHandler = GetSystemPerformanceResourceHandler(
-			name = ConfigConst.SYSTEM_PERF_MSG,
-			coap_server = self.coapServer)
+			# handler de system performance
+			self.sysPerfHandler = GetSystemPerformanceResourceHandler(
+				name        = ConfigConst.SYSTEM_PERF_MSG,
+				coap_server = self.coapServer)
 
-		# registrar en el servidor
-		self.addResource(
-			ResourceNameEnum.CDA_SENSOR_MSG_RESOURCE,
-			ConfigConst.TEMP_SENSOR_NAME,
-			self.tempHandler)
+			self.addResource(
+				resourcePath = ResourceNameEnum.CDA_SYSTEM_PERF_MSG_RESOURCE,
+				endName      = ConfigConst.SYSTEM_PERF_MSG,
+				resource     = self.sysPerfHandler)
 
-		self.addResource(
-			ResourceNameEnum.CDA_SYSTEM_PERF_MSG_RESOURCE,
-			ConfigConst.SYSTEM_PERF_MSG,
-			self.sysPerfHandler)
+			# handler de telemetría (temperatura)
+			self.tempHandler = GetTelemetryResourceHandler(
+				name        = ConfigConst.TEMP_SENSOR_NAME,
+				coap_server = self.coapServer)
 
-		self.actuatorHandler = UpdateActuatorResourceHandler(
-			dataMsgListener = self.dataMsgListener)
+			self.addResource(
+				resourcePath = ResourceNameEnum.CDA_SENSOR_MSG_RESOURCE,
+				endName      = ConfigConst.TEMP_SENSOR_NAME,
+				resource     = self.tempHandler)
 
-		self.addResource(
-			ResourceNameEnum.CDA_ACTUATOR_CMD_RESOURCE,
-			ConfigConst.ACTUATOR_CMD,
-			self.actuatorHandler)
+			# registrar callbacks con DeviceDataManager
+			if self.dataMsgListener:
+				self.dataMsgListener.setSystemPerformanceDataListener(
+					listener = self.sysPerfHandler)
+
+				self.dataMsgListener.setTelemetryDataListener(
+					name     = ConfigConst.TEMP_SENSOR_NAME,
+					listener = self.tempHandler)
+
+			logging.info("CoAP server initialized with all resource handlers.")
+
+		except Exception as e:
+			traceback.print_exception(type(e), e, e.__traceback__)
+			logging.warning("Failed to initialize CoAP server.")
 
 	def _runServer(self):
 		try:

@@ -5,6 +5,7 @@
 import logging
 
 from programmingtheiot.cda.connection.MqttClientConnector import MqttClientConnector
+from programmingtheiot.cda.connection.CoapClientConnector import CoapClientConnector
 from programmingtheiot.cda.connection.CoapServerAdapter import CoapServerAdapter
 from programmingtheiot.cda.system.ActuatorAdapterManager import ActuatorAdapterManager
 from programmingtheiot.cda.system.SensorAdapterManager import SensorAdapterManager
@@ -56,6 +57,10 @@ class DeviceDataManager(IDataMessageListener):
 		self.enableCoapServer = \
 			self.configUtil.getBoolean(
 				section = ConfigConst.CONSTRAINED_DEVICE, key = ConfigConst.ENABLE_COAP_SERVER_KEY)
+		self.enableCoapClient = \
+			self.configUtil.getBoolean( \
+				section = ConfigConst.CONSTRAINED_DEVICE, key = ConfigConst.ENABLE_COAP_CLIENT_KEY)
+
 
 		self.sysPerfMgr         = None
 		self.sensorAdapterMgr   = None
@@ -87,6 +92,10 @@ class DeviceDataManager(IDataMessageListener):
 		if self.enableCoapServer:
 			self.coapServer = CoapServerAdapter(dataMsgListener = self)
 			logging.info("CoAP server enabled")
+		if self.enableCoapClient:
+			self.coapClient = CoapClientConnector(dataMsgListener = self)
+			logging.info("CoAP client enabled")
+
 
 	def handleActuatorCommandMessage(self, data: ActuatorData = None) -> ActuatorData:
 		logging.info("Actuator data: " + str(data))

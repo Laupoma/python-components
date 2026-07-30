@@ -3,6 +3,7 @@
 # This class is part of the Programming the Internet of Things project.
 #
 import logging
+import time
 import paho.mqtt.client as mqttClient
 
 import programmingtheiot.common.ConfigConst as ConfigConst
@@ -67,7 +68,26 @@ class MqttClientConnector(IPubSubClient):
 			self.mqttClient.connect(self.host, self.port, self.keepAlive)
 			self.mqttClient.loop_start()
 
-			return True
+			# NOTA: connect() y loop_start() son asincronos. connect() solo INICIA
+			# la conexion y retorna al instante; el handshake real con el broker
+			# ocurre en el hilo de fondo de loop_start(). Si devolvieramos True aca,
+			# el metodo mentiria (diria "conectado" antes de estarlo), lo que rompia
+			# el test de performance. Solucion: esperar activamente hasta que
+			# is_connected() confirme, con un limite de intentos (timeout) para que
+			# NUNCA se cuelgue de forma infinita si el broker no responde.
+			maxConnAttempts = 50   # 50 x 0.1s = hasta 5 segundos de espera
+			connAttempt = 0
+
+			while not self.mqttClient.is_connected() and connAttempt < maxConnAttempts:
+				time.sleep(0.1)
+				connAttempt += 1
+
+			if self.mqttClient.is_connected():
+				logging.info('MQTT client connected to broker at host: ' + self.host)
+				return True
+			else:
+				logging.warning('MQTT client failed to connect within timeout. Host: ' + self.host)
+				return False
 		else:
 			logging.warning('MQTT client is already connected. Ignoring connect request.')
 
@@ -103,7 +123,8 @@ class MqttClientConnector(IPubSubClient):
 			logging.info('MQTT message received with no payload: ' + str(msg))
 
 	def onPublish(self, client, userdata, mid):
-		logging.info('MQTT message published: ' + str(client))
+		#logging.info('MQTT message published: ' + str(client))
+		pass
 
 	def onSubscribe(self, client, userdata, mid, granted_qos):
 		logging.info('MQTT client subscribed: ' + str(client))

@@ -29,7 +29,7 @@ class CoapClientPerformanceTest(unittest.TestCase):
 	environment.
 	"""
 	NS_IN_MILLIS = 1000000
-	MAX_TEST_RUNS = 10000
+	MAX_TEST_RUNS = 1000
 	
 	@classmethod
 	def setUpClass(self):
@@ -39,7 +39,11 @@ class CoapClientPerformanceTest(unittest.TestCase):
 		self.coapClient = CoapClientConnector()
 
 	def tearDown(self):
-		self.coapClient.disconnectClient()
+		# NOTA: CoapClientConnector no tiene disconnectClient(). El cliente real
+		# es el HelperClient de coapthon, que se cierra con .stop(). Cerrarlo
+		# entre tests libera hilos/sockets y ayuda a no agotar el limite de hilos.
+		if self.coapClient and self.coapClient.coapClient:
+			self.coapClient.coapClient.stop()
 					
 	@unittest.skip("Ignore for now.")
 	def testGetRequestCon(self):

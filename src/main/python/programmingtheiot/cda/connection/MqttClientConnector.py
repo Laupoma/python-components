@@ -4,6 +4,7 @@
 #
 import logging
 import time
+import ssl
 import paho.mqtt.client as mqttClient
 
 import programmingtheiot.common.ConfigConst as ConfigConst
@@ -39,6 +40,17 @@ class MqttClientConnector(IPubSubClient):
 			self.config.getInteger( \
 				ConfigConst.MQTT_GATEWAY_SERVICE, ConfigConst.DEFAULT_QOS_KEY, ConfigConst.DEFAULT_QOS)
 
+
+		# TLS: leer si el cifrado esta habilitado y la ruta al certificado (.pem)
+		# del broker. Por ahora enableEncryption estara en False en PiotConfig.props,
+		# asi que este cliente seguira conectandose sin cifrar (puerto 1883).
+		self.enableEncryption = \
+			self.config.getBoolean( \
+				ConfigConst.MQTT_GATEWAY_SERVICE, ConfigConst.ENABLE_CRYPT_KEY)
+
+		self.pemFileName = \
+			self.config.getProperty( \
+				ConfigConst.MQTT_GATEWAY_SERVICE, ConfigConst.CERT_FILE_KEY)
 		self.mqttClient = None
 
 		if not clientID:
@@ -56,6 +68,23 @@ class MqttClientConnector(IPubSubClient):
 	def connectClient(self) -> bool:
 		if not self.mqttClient:
 			self.mqttClient = mqttClient.Client(client_id = self.clientID, clean_session = True)
+
+
+			# TLS: si el cifrado esta habilitado, cambiar al puerto seguro (8883)
+			# y cargar el certificado del broker antes de conectar. El try/except
+			# asegura que si algo falla, cae a conexion sin cifrar en vez de romper.
+			try:
+				if self.enableEncryption:
+					logging.info("Enabling TLS encryption...")
+
+					self.port = \
+						self.config.getInteger( \
+							ConfigConst.MQTT_GATEWAY_SERVICE, ConfigConst.SECURE_PORT_KEY, ConfigConst.DEFAULT_MQTT_SECURE_PORT)
+
+					self.mqttClient.tls_set(self.pemFileName, tls_version = ssl.PROTOCOL_TLS_CLIENT)
+					self.mqttClient.tls_set_context(context = None)
+			except:
+				logging.warning("Failed to enable TLS encryption. Using unencrypted connection.")
 
 			self.mqttClient.on_connect    = self.onConnect
 			self.mqttClient.on_disconnect = self.onDisconnect

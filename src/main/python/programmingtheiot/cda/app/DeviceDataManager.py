@@ -25,7 +25,7 @@ from programmingtheiot.data.SystemPerformanceData import SystemPerformanceData
 
 class DeviceDataManager(IDataMessageListener):
 
-	def __init__(self):
+	def __init__(self, disableAllComms: bool = False):
 		self.configUtil = ConfigUtil()
 
 		self.enableSystemPerf = \
@@ -50,16 +50,26 @@ class DeviceDataManager(IDataMessageListener):
 			self.configUtil.getFloat(
 				ConfigConst.CONSTRAINED_DEVICE, ConfigConst.TRIGGER_HVAC_TEMP_CEILING_KEY)
 
-		self.enableMqttClient = \
-			self.configUtil.getBoolean(
-				section = ConfigConst.CONSTRAINED_DEVICE, key = ConfigConst.ENABLE_MQTT_CLIENT_KEY)
+		# disableAllComms permite forzar el apagado de MQTT y CoAP sin tocar
+		# la config global (PiotConfig.props). Lo usan los tests que quieren
+		# probar la logica del DeviceDataManager de forma aislada, sin depender
+		# de un broker o servidor CoAP vivo. Por defecto (False) se lee la config.
+		if disableAllComms:
+			self.enableMqttClient = False
+			self.enableCoapServer = False
+			self.enableCoapClient = False
+		else:
+			self.enableMqttClient = \
+				self.configUtil.getBoolean(
+					section = ConfigConst.CONSTRAINED_DEVICE, key = ConfigConst.ENABLE_MQTT_CLIENT_KEY)
 
-		self.enableCoapServer = \
-			self.configUtil.getBoolean(
-				section = ConfigConst.CONSTRAINED_DEVICE, key = ConfigConst.ENABLE_COAP_SERVER_KEY)
-		self.enableCoapClient = \
-			self.configUtil.getBoolean( \
-				section = ConfigConst.CONSTRAINED_DEVICE, key = ConfigConst.ENABLE_COAP_CLIENT_KEY)
+			self.enableCoapServer = \
+				self.configUtil.getBoolean(
+					section = ConfigConst.CONSTRAINED_DEVICE, key = ConfigConst.ENABLE_COAP_SERVER_KEY)
+
+			self.enableCoapClient = \
+				self.configUtil.getBoolean(
+					section = ConfigConst.CONSTRAINED_DEVICE, key = ConfigConst.ENABLE_COAP_CLIENT_KEY)
 
 
 		self.sysPerfMgr         = None

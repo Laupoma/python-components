@@ -19,6 +19,7 @@ from programmingtheiot.common.ISystemPerformanceDataListener import ISystemPerfo
 from programmingtheiot.common.ITelemetryDataListener import ITelemetryDataListener
 from programmingtheiot.common.ResourceNameEnum import ResourceNameEnum
 
+from programmingtheiot.data.DataUtil import DataUtil
 from programmingtheiot.data.ActuatorData import ActuatorData
 from programmingtheiot.data.SensorData import SensorData
 from programmingtheiot.data.SystemPerformanceData import SystemPerformanceData
@@ -136,6 +137,11 @@ class DeviceDataManager(IDataMessageListener):
 		if data:
 			logging.debug("Incoming sensor data received (from sensor manager): " + str(data))
 			self._handleSensorDataAnalysis(data = data)
+
+			# Convertir a JSON y enviar upstream al GDA
+			jsonData = DataUtil().sensorDataToJson(data = data)
+			self._handleUpstreamTransmission(resourceName = ResourceNameEnum.CDA_SENSOR_MSG_RESOURCE, msg = jsonData)
+
 			return True
 		else:
 			logging.warning("Incoming sensor data is invalid (null). Ignoring.")
@@ -144,6 +150,11 @@ class DeviceDataManager(IDataMessageListener):
 	def handleSystemPerformanceMessage(self, data: SystemPerformanceData = None) -> bool:
 		if data:
 			logging.debug("Incoming system performance message received: " + str(data))
+
+			# Convertir a JSON y enviar upstream al GDA
+			jsonData = DataUtil().systemPerformanceDataToJson(data = data)
+			self._handleUpstreamTransmission(resourceName = ResourceNameEnum.CDA_SYSTEM_PERF_MSG_RESOURCE, msg = jsonData)
+
 			return True
 		else:
 			logging.warning("Incoming system performance data is invalid (null). Ignoring.")
@@ -224,4 +235,11 @@ class DeviceDataManager(IDataMessageListener):
 			self.handleActuatorCommandMessage(ad)
 
 	def _handleUpstreamTransmission(self, resourceName: ResourceNameEnum, msg: str):
-		logging.debug("Upstream transmission (not yet implemented): " + str(resourceName))
+		# Envia el mensaje (JSON) hacia el GDA. Este es el canal ASCENDENTE (upstream)
+		# del lazo: el CDA reporta sus datos al GDA. Se usa MQTT (publish). Si en el
+		# futuro se habilita CoAP, se agregaria el POST/PUT por el coapClient.
+		if self.mqttClient:
+			if self.mqttClient.publishMessage(resource = resourceName, msg = msg):
+				logging.debug("Published upstream data to resource (MQTT): %s", str(resourceName))
+			else:
+				logging.warning("Failed to publish upstream data to resource (MQTT): %s", str(resourceName))

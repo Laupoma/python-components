@@ -165,11 +165,10 @@ class DeviceDataManager(IDataMessageListener):
 			self.sensorAdapterMgr.startManager()
 
 		if self.mqttClient:
+			# NOTA: la suscripcion al topic de actuacion ahora la hace el propio
+			# MqttClientConnector en su callback onConnect(), tras conexion exitosa.
+			# Por eso aca solo conectamos; ya no se suscribe manualmente.
 			self.mqttClient.connectClient()
-			self.mqttClient.subscribeToTopic(
-				resource = ResourceNameEnum.CDA_ACTUATOR_CMD_RESOURCE,
-				callback = None,
-				qos      = ConfigConst.DEFAULT_QOS)
 
 		if self.coapServer:
 			self.coapServer.startServer()

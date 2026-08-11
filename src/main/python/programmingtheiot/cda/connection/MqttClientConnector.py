@@ -15,6 +15,8 @@ from programmingtheiot.common.ResourceNameEnum import ResourceNameEnum
 
 from programmingtheiot.cda.connection.IPubSubClient import IPubSubClient
 
+from programmingtheiot.data.DataUtil import DataUtil
+
 class MqttClientConnector(IPubSubClient):
 	"""
 	Shell representation of class for student implementation.
@@ -137,6 +139,16 @@ class MqttClientConnector(IPubSubClient):
 	def onConnect(self, client, userdata, flags, rc):
 		if rc == 0:
 			logging.info('MQTT client connected to broker: ' + str(client))
+
+			# Suscribirse al topic de comandos de actuacion SOLO tras conexion exitosa.
+			# subscribe() registra la suscripcion; message_callback_add() redirige los
+			# mensajes de ese topic al callback especifico onActuatorCommandMessage().
+			self.mqttClient.subscribe( \
+				topic = ResourceNameEnum.CDA_ACTUATOR_CMD_RESOURCE.value, qos = self.defaultQos)
+
+			self.mqttClient.message_callback_add( \
+				sub = ResourceNameEnum.CDA_ACTUATOR_CMD_RESOURCE.value, \
+				callback = self.onActuatorCommandMessage)
 		else:
 			logging.warning('MQTT client failed to connect. Result code: ' + str(rc))
 
@@ -159,7 +171,15 @@ class MqttClientConnector(IPubSubClient):
 		logging.info('MQTT client subscribed: ' + str(client))
 
 	def onActuatorCommandMessage(self, client, userdata, msg):
-		logging.info('Actuator command message received on topic: ' + msg.topic)
+		logging.info('[Callback] Actuator command message received. Topic: %s.', msg.topic)
+
+		if self.dataMsgListener:
+			try:
+				# se asume que todo viaja codificado en UTF-8 entre GDA y CDA
+				actuatorData = DataUtil().jsonToActuatorData(msg.payload.decode('utf-8'))
+				self.dataMsgListener.handleActuatorCommandMessage(actuatorData)
+			except:
+				logging.exception("Failed to convert incoming actuation command payload to ActuatorData: ")
 
 	def publishMessage(self, resource: ResourceNameEnum = None, msg: str = None, qos: int = ConfigConst.DEFAULT_QOS) -> bool:
 		if not resource:
@@ -174,7 +194,13 @@ class MqttClientConnector(IPubSubClient):
 			qos = ConfigConst.DEFAULT_QOS
 
 		msgInfo = self.mqttClient.publish(topic = resource.value, payload = msg, qos = qos)
-		msgInfo.wait_for_publish()
+
+		# NOTA: wait_for_publish() se comenta a proposito. Bloquea el cliente MQTT
+		# hasta que la publicacion termina, lo que en un sistema que publica Y escucha
+		# a la vez puede causar deadlock (traba la recepcion de suscripciones). Al
+		# comentarlo, publishMessage retorna sin bloquear. El True ya NO garantiza
+		# publicacion exitosa; se podria verificar despues con msgInfo.is_published().
+		#msgInfo.wait_for_publish()
 
 		return True
 
